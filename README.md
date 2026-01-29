@@ -13,18 +13,18 @@ A [Clawdbot](https://github.com/clawdbot/clawdbot) skill for AI image + video ge
 ### As a Clawdbot Skill
 
 ```bash
-# Clone to your skills directory
-git clone https://github.com/mauvis/sogni-gen ~/.clawdbot/skills/sogni-gen
-cd ~/.clawdbot/skills/sogni-gen
-npm install
-```
-
-```bash
-# Or install from npm (no git clone)
+# Install from npm (no git clone)
 mkdir -p ~/.clawdbot/skills
 cd ~/.clawdbot/skills
 npm i sogni-gen
 ln -sfn node_modules/sogni-gen sogni-gen
+```
+
+```bash
+# Or clone to your skills directory
+git clone https://github.com/mauvis/sogni-gen ~/.clawdbot/skills/sogni-gen
+cd ~/.clawdbot/skills/sogni-gen
+npm install
 ```
 
 ### Standalone
