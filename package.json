@@ -1,0 +1,25 @@
+{
+  "name": "sogni-gen",
+  "version": "1.0.0",
+  "description": "Sogni AI image generation skill for Clawdbot",
+  "type": "module",
+  "main": "sogni-gen.mjs",
+  "bin": {
+    "sogni-gen": "./sogni-gen.mjs"
+  },
+  "scripts": {
+    "test": "node sogni-gen.mjs --help"
+  },
+  "keywords": [
+    "sogni",
+    "ai",
+    "image-generation",
+    "clawdbot",
+    "skill"
+  ],
+  "author": "Mauvis Ledford",
+  "license": "MIT",
+  "dependencies": {
+    "@sogni-ai/sogni-client-wrapper": "^1.3.2"
+  }
+}

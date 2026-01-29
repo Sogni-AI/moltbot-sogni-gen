@@ -1,0 +1,71 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage
+*.lcov
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Cache and build tools
+.cache
+.parcel-cache
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_*
+.rollup.cache
+.pnpm-store
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Build outputs
+dist
+build
+out
+.tmp
+.tmp.*
+.temp
+.temp.*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local config with possible tokens
+.npmrc
+.yarnrc
+.yarnrc.yml
+
+# Editors
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# OS files
+.DS_Store
+
+# Scratch / local scripts
+test-*.mjs
+debug-*.mjs
