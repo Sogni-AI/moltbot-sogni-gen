@@ -1,0 +1,113 @@
+{
+  "id": "sogni-gen",
+  "name": "Sogni Image & Video Generation",
+  "description": "Generate images and videos using Sogni AI via the sogni-gen skill.",
+  "version": "1.0.1",
+  "skills": [
+    "."
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "defaultImageModel": {
+        "type": "string",
+        "default": "z_image_turbo_bf16",
+        "description": "Default model for text-to-image."
+      },
+      "defaultEditModel": {
+        "type": "string",
+        "default": "qwen_image_edit_2511_fp8_lightning",
+        "description": "Default model for image editing when context images are provided."
+      },
+      "videoModels": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Override per-workflow default video models.",
+        "properties": {
+          "t2v": { "type": "string", "default": "wan_v2.2-14b-fp8_t2v_lightx2v" },
+          "i2v": { "type": "string", "default": "wan_v2.2-14b-fp8_i2v_lightx2v" },
+          "s2v": { "type": "string", "default": "wan_v2.2-14b-fp8_s2v_lightx2v" },
+          "animate-move": { "type": "string", "default": "wan_v2.2-14b-fp8_animate-move_lightx2v" },
+          "animate-replace": { "type": "string", "default": "wan_v2.2-14b-fp8_animate-replace_lightx2v" }
+        }
+      },
+      "defaultVideoWorkflow": {
+        "type": "string",
+        "enum": ["t2v", "i2v", "s2v", "animate-move", "animate-replace"],
+        "default": "t2v",
+        "description": "Default video workflow when none can be inferred."
+      },
+      "defaultNetwork": {
+        "type": "string",
+        "enum": ["fast", "relaxed"],
+        "default": "fast",
+        "description": "Default Sogni network for the client."
+      },
+      "defaultTokenType": {
+        "type": "string",
+        "enum": ["spark", "sogni"],
+        "default": "spark",
+        "description": "Default token balance to use."
+      },
+      "seedStrategy": {
+        "type": "string",
+        "enum": ["random", "prompt-hash"],
+        "default": "prompt-hash",
+        "description": "Seed strategy when no seed is provided."
+      },
+      "modelDefaults": {
+        "type": "object",
+        "description": "Per-model overrides for steps/guidance.",
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "steps": { "type": "integer", "minimum": 1 },
+            "guidance": { "type": "number", "minimum": 0 }
+          }
+        }
+      },
+      "defaultWidth": {
+        "type": "integer",
+        "minimum": 64,
+        "maximum": 4096,
+        "default": 512
+      },
+      "defaultHeight": {
+        "type": "integer",
+        "minimum": 64,
+        "maximum": 4096,
+        "default": 512
+      },
+      "defaultCount": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 16,
+        "default": 1
+      },
+      "defaultFps": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 60,
+        "default": 16
+      },
+      "defaultDurationSec": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 60,
+        "default": 5
+      },
+      "defaultImageTimeoutSec": {
+        "type": "integer",
+        "minimum": 5,
+        "default": 30
+      },
+      "defaultVideoTimeoutSec": {
+        "type": "integer",
+        "minimum": 30,
+        "default": 300
+      }
+    }
+  }
+}

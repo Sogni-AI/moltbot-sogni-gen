@@ -74,15 +74,72 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `-t, --timeout <sec>` | Timeout seconds | 30 (300 for video) |
 | `-s, --seed <num>` | Specific seed | random |
 | `--last-seed` | Reuse seed from last render | - |
+| `--seed-strategy <s>` | Seed strategy: random\|prompt-hash | prompt-hash |
+| `--steps <num>` | Override steps (model-dependent) | - |
+| `--guidance <num>` | Override guidance (model-dependent) | - |
+| `--token-type <type>` | Token type: spark\|sogni | spark |
 | `-c, --context <path>` | Context image for editing | - |
 | `--last-image` | Use last generated image as context/ref | - |
 | `--video, -v` | Generate video instead of image | - |
+| `--workflow <type>` | Video workflow (t2v|i2v|s2v|animate-move|animate-replace) | inferred |
 | `--fps <num>` | Frames per second (video) | 16 |
 | `--duration <sec>` | Duration in seconds (video) | 5 |
+| `--frames <num>` | Override total frames (video) | - |
 | `--ref <path>` | Reference image for video | required for video |
+| `--ref-end <path>` | End frame for i2v interpolation | - |
+| `--ref-audio <path>` | Reference audio for s2v | - |
+| `--ref-video <path>` | Reference video for animate workflows | - |
 | `--last` | Show last render info | - |
 | `--json` | JSON output | false |
 | `-q, --quiet` | No progress output | false |
+
+## OpenClaw Config Defaults
+
+When installed as an OpenClaw plugin, `sogni-gen` will read defaults from:
+
+`~/.openclaw/openclaw.json`
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "sogni-gen": {
+        "enabled": true,
+        "config": {
+          "defaultImageModel": "z_image_turbo_bf16",
+          "defaultEditModel": "qwen_image_edit_2511_fp8_lightning",
+          "videoModels": {
+            "t2v": "wan_v2.2-14b-fp8_t2v_lightx2v",
+            "i2v": "wan_v2.2-14b-fp8_i2v_lightx2v",
+            "s2v": "wan_v2.2-14b-fp8_s2v_lightx2v",
+            "animate-move": "wan_v2.2-14b-fp8_animate-move_lightx2v",
+            "animate-replace": "wan_v2.2-14b-fp8_animate-replace_lightx2v"
+          },
+          "defaultVideoWorkflow": "t2v",
+          "defaultNetwork": "fast",
+          "defaultTokenType": "spark",
+          "seedStrategy": "prompt-hash",
+          "modelDefaults": {
+            "flux1-schnell-fp8": { "steps": 4, "guidance": 3.5 },
+            "flux2_dev_fp8": { "steps": 20, "guidance": 7.5 }
+          },
+          "defaultWidth": 768,
+          "defaultHeight": 768,
+          "defaultCount": 1,
+          "defaultFps": 16,
+          "defaultDurationSec": 5,
+          "defaultImageTimeoutSec": 30,
+          "defaultVideoTimeoutSec": 300
+        }
+      }
+    }
+  }
+}
+```
+
+CLI flags always override these defaults.
+If your OpenClaw config lives elsewhere, set `OPENCLAW_CONFIG_PATH`.
+Seed strategies: `prompt-hash` (deterministic) or `random`.
 
 ## Image Models
 
@@ -101,6 +158,10 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 |-------|-------|----------|
 | `wan_v2.2-14b-fp8_i2v_lightx2v` | Fast | Default video generation |
 | `wan_v2.2-14b-fp8_i2v` | Slow | Higher quality video |
+| `wan_v2.2-14b-fp8_t2v_lightx2v` | Fast | Text-to-video |
+| `wan_v2.2-14b-fp8_s2v_lightx2v` | Fast | Sound-to-video |
+| `wan_v2.2-14b-fp8_animate-move_lightx2v` | Fast | Animate-move |
+| `wan_v2.2-14b-fp8_animate-replace_lightx2v` | Fast | Animate-replace |
 
 ## Image Editing with Context
 
@@ -124,6 +185,9 @@ When context images are provided without `-m`, defaults to `qwen_image_edit_2511
 Generate videos from a reference image:
 
 ```bash
+# Text-to-video (t2v)
+node sogni-gen.mjs --video "ocean waves at sunset"
+
 # Basic video from image
 node sogni-gen.mjs --video --ref cat.jpg -o cat.mp4 "cat walks around"
 
@@ -132,6 +196,14 @@ node sogni-gen.mjs --last-image --video "gentle camera pan"
 
 # Custom duration and FPS
 node sogni-gen.mjs --video --ref scene.png --duration 10 --fps 24 "zoom out slowly"
+
+# Sound-to-video (s2v)
+node sogni-gen.mjs --video --ref face.jpg --ref-audio speech.m4a \
+  -m wan_v2.2-14b-fp8_s2v_lightx2v "lip sync talking head"
+
+# Animate (motion transfer)
+node sogni-gen.mjs --video --ref subject.jpg --ref-video motion.mp4 \
+  --workflow animate-move "transfer motion"
 ```
 
 ## Photo Restoration
@@ -173,6 +245,9 @@ node {{skillDir}}/sogni-gen.mjs -q -c /path/to/input.jpg -o /tmp/edited.png "mak
 
 # Generate video from image
 node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -o /tmp/video.mp4 "camera slowly zooms in"
+
+# Generate text-to-video
+node {{skillDir}}/sogni-gen.mjs -q --video -o /tmp/video.mp4 "ocean waves at sunset"
 
 # Then send via message tool with filePath
 ```
