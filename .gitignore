@@ -69,3 +69,6 @@ out
 # Scratch / local scripts
 test-*.mjs
 debug-*.mjs
+
+# Claude Code local config
+.claude/
