@@ -109,6 +109,7 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--ref-video <path>` | Reference video for animate workflows | - |
 | `--last` | Show last render info | - |
 | `--json` | JSON output | false |
+| `--strict-size` | Do not auto-adjust i2v video size for reference resizing constraints | false |
 | `-q, --quiet` | No progress output | false |
 
 ## OpenClaw Config Defaults
@@ -363,8 +364,8 @@ Uses Spark tokens from your Sogni account. 512x512 images are most cost-efficien
 ## Troubleshooting
 
 - **Auth errors**: Check credentials in `~/.config/sogni/credentials`
-- **i2v non-square refs fail immediately**: Video `--width`/`--height` must be divisible by 16, and i2v reference images are aspect-fit into the requested size.
-- **Aspect ratio rule of thumb (manual sizing)**: Reduce `refW:refH` by `gcd`, then choose `width = 16*rw*k`, `height = 16*rh*k` for integer `k`.
-- **If you omit `--width/--height` with a local `--ref`**: the script auto-picks a compatible size that matches the reference aspect ratio and the 16px constraint.
+- **i2v sizing gotchas**: Video sizes are constrained (min 480px, max 1536px, divisible by 16). For i2v, the client wrapper resizes the reference (`fit: inside`) and uses the resized dimensions as the final video size. Because this uses rounding, a requested size can still yield an invalid final size (example: `1024x1536` requested but ref becomes `1024x1535`).
+- **Auto-adjustment**: With a local `--ref`, the script will auto-adjust the requested size to avoid non-16 resized reference dimensions.
+- **If the script adjusts your size but you want to fail instead**: pass `--strict-size` and it will print a suggested `--width/--height`.
 - **Timeouts**: Try a faster model or increase `-t` timeout
 - **No workers**: Check https://sogni.ai for network status

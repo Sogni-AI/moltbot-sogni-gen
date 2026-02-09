@@ -112,12 +112,13 @@ test('i2v infers a 16-multiple video size from non-square reference when width/h
   ]);
   assert.equal(exitCode, 0);
   assert.ok(state?.lastVideoProject, 'createVideoProject was called');
-  // screenshot.jpg is 1170x1200 (39:40). Smallest 16-multiple size near the default maxDim is 624x640.
-  assert.equal(state.lastVideoProject.width, 624);
-  assert.equal(state.lastVideoProject.height, 640);
+  // screenshot.jpg is 1170x1200. Default requested size is 512x512, but i2v would resize to 499x512 (499 not divisible by 16).
+  // The CLI auto-picks a compatible bounding box (divisible by 16) so the resized reference is also divisible by 16.
+  assert.equal(state.lastVideoProject.width, 608);
+  assert.equal(state.lastVideoProject.height, 624);
 });
 
-test('json error: video width/height must be divisible by 16', () => {
+test('video dims are normalized to 16-multiples instead of hard failing', () => {
   const { exitCode, stdout } = runCli([
     '--json',
     '--video',
@@ -125,16 +126,17 @@ test('json error: video width/height must be divisible by 16', () => {
     '--height', '512',
     'ocean waves'
   ]);
-  assert.equal(exitCode, 1);
+  assert.equal(exitCode, 0);
   const payload = JSON.parse(stdout.trim());
-  assert.equal(payload.success, false);
-  assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
-  assert.ok(payload.error.includes('divisible by 16'));
+  assert.equal(payload.success, true);
+  assert.equal(payload.width, 496);
+  assert.equal(payload.height, 512);
 });
 
 test('json error: i2v rejects mismatched explicit size and suggests a compatible 16-multiple aspect', () => {
   const { exitCode, stdout } = runCli([
     '--json',
+    '--strict-size',
     '--video',
     '--workflow', 'i2v',
     '--ref', 'screenshot.jpg',
@@ -146,5 +148,53 @@ test('json error: i2v rejects mismatched explicit size and suggests a compatible
   const payload = JSON.parse(stdout.trim());
   assert.equal(payload.success, false);
   assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
-  assert.ok(String(payload.hint || '').includes('--width 624 --height 640'));
+  assert.ok(String(payload.hint || '').includes('--width 608 --height 624'));
+});
+
+test('i2v auto-adjust handles near-matching aspects that still round to a non-16 dimension', async () => {
+  const { default: sharp } = await import('sharp');
+  const tmp = mkdtempSync(join(tmpdir(), 'sogni-gen-ref-'));
+  const refPath = join(tmp, 'ref-587x880.png');
+  await sharp({
+    create: { width: 587, height: 880, channels: 3, background: { r: 0, g: 0, b: 0 } }
+  }).png().toFile(refPath);
+
+  const { exitCode, state } = runCli([
+    '--video',
+    '--workflow', 'i2v',
+    '--ref', refPath,
+    '--duration', '1',
+    'gentle camera pan'
+  ]);
+  assert.equal(exitCode, 0);
+  assert.ok(state?.lastVideoProject);
+  // CLI chooses a compatible bounding box; wrapper will resize the reference inside it (to 480x720).
+  assert.equal(state.lastVideoProject.width, 512);
+  assert.equal(state.lastVideoProject.height, 720);
+});
+
+test('json error: i2v explicit size that rounds to non-16 suggests a compatible bbox', async () => {
+  const { default: sharp } = await import('sharp');
+  const tmp = mkdtempSync(join(tmpdir(), 'sogni-gen-ref-'));
+  const refPath = join(tmp, 'ref-587x880.png');
+  await sharp({
+    create: { width: 587, height: 880, channels: 3, background: { r: 0, g: 0, b: 0 } }
+  }).png().toFile(refPath);
+
+  const { exitCode, stdout } = runCli([
+    '--json',
+    '--strict-size',
+    '--video',
+    '--workflow', 'i2v',
+    '--ref', refPath,
+    '--width', '1024',
+    '--height', '1536',
+    '--duration', '1',
+    'gentle camera pan'
+  ]);
+  assert.equal(exitCode, 1);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, false);
+  assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
+  assert.ok(String(payload.hint || '').includes('--width 1024 --height 1296'));
 });

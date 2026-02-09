@@ -302,31 +302,104 @@ function getImageDimensionsFromBuffer(buffer) {
   return getPngDimensions(buffer) || getJpegDimensions(buffer);
 }
 
-function computeAspectFitDimensions(refWidth, refHeight, targetWidth, targetHeight) {
+const MIN_VIDEO_DIMENSION = 480;
+const MAX_VIDEO_DIMENSION = 1536;
+const VIDEO_DIMENSION_MULTIPLE = 16;
+
+function normalizeVideoDimensionsLikeWrapper(width, height) {
+  let targetWidth = Number(width);
+  let targetHeight = Number(height);
+  let adjusted = false;
+
+  if (!Number.isFinite(targetWidth) || !Number.isFinite(targetHeight)) {
+    return { width: targetWidth, height: targetHeight, adjusted: false };
+  }
+
+  if (targetWidth > MAX_VIDEO_DIMENSION || targetHeight > MAX_VIDEO_DIMENSION) {
+    const scaleFactor = Math.min(MAX_VIDEO_DIMENSION / targetWidth, MAX_VIDEO_DIMENSION / targetHeight);
+    targetWidth = Math.floor(targetWidth * scaleFactor);
+    targetHeight = Math.floor(targetHeight * scaleFactor);
+    adjusted = true;
+  }
+
+  if (targetWidth < MIN_VIDEO_DIMENSION || targetHeight < MIN_VIDEO_DIMENSION) {
+    const scaleFactor = Math.max(MIN_VIDEO_DIMENSION / targetWidth, MIN_VIDEO_DIMENSION / targetHeight);
+    targetWidth = Math.floor(targetWidth * scaleFactor);
+    targetHeight = Math.floor(targetHeight * scaleFactor);
+    adjusted = true;
+    if (targetWidth > MAX_VIDEO_DIMENSION || targetHeight > MAX_VIDEO_DIMENSION) {
+      const downscaleFactor = Math.min(MAX_VIDEO_DIMENSION / targetWidth, MAX_VIDEO_DIMENSION / targetHeight);
+      targetWidth = Math.floor(targetWidth * downscaleFactor);
+      targetHeight = Math.floor(targetHeight * downscaleFactor);
+    }
+  }
+
+  const roundedWidth = Math.floor(targetWidth / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
+  const roundedHeight = Math.floor(targetHeight / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
+  if (roundedWidth !== targetWidth || roundedHeight !== targetHeight) {
+    adjusted = true;
+  }
+  targetWidth = roundedWidth;
+  targetHeight = roundedHeight;
+
+  if (targetWidth < MIN_VIDEO_DIMENSION) {
+    targetWidth = Math.ceil(MIN_VIDEO_DIMENSION / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
+    adjusted = true;
+  }
+  if (targetHeight < MIN_VIDEO_DIMENSION) {
+    targetHeight = Math.ceil(MIN_VIDEO_DIMENSION / VIDEO_DIMENSION_MULTIPLE) * VIDEO_DIMENSION_MULTIPLE;
+    adjusted = true;
+  }
+
+  return { width: targetWidth, height: targetHeight, adjusted };
+}
+
+function predictSharpInsideResizeDims(refWidth, refHeight, targetWidth, targetHeight) {
   const rw = Number(refWidth);
   const rh = Number(refHeight);
   const tw = Number(targetWidth);
   const th = Number(targetHeight);
-  if (!rw || !rh || !tw || !th) return null;
-  const scale = Math.min(tw / rw, th / rh);
-  const width = Math.max(1, Math.round(rw * scale));
-  const height = Math.max(1, Math.round(rh * scale));
-  return { width, height };
+  if (!Number.isFinite(rw) || !Number.isFinite(rh) || !Number.isFinite(tw) || !Number.isFinite(th) || rw <= 0 || rh <= 0 || tw <= 0 || th <= 0) {
+    return null;
+  }
+
+  // Matches sharp(vips) behavior in SogniClientWrapper.resizeImageBuffer(..., fit: 'inside'):
+  // Choose limiting dimension; keep it exact; compute the other dimension with Math.round().
+  const scaleW = tw / rw;
+  const scaleH = th / rh;
+  const widthLimited = scaleW <= scaleH;
+  if (widthLimited) {
+    return { width: tw, height: Math.round(rh * tw / rw) };
+  }
+  return { width: Math.round(rw * th / rh), height: th };
 }
 
-function suggestVideoSizeForReference(refWidth, refHeight, targetMaxDim) {
-  const g = gcdInt(refWidth, refHeight);
-  const ratioW = Math.max(1, Math.trunc(refWidth / g));
-  const ratioH = Math.max(1, Math.trunc(refHeight / g));
-  const maxDim = Number.isFinite(targetMaxDim) && targetMaxDim > 0 ? targetMaxDim : 512;
-  const unit = 16 * Math.max(ratioW, ratioH);
-  const k = Math.max(1, Math.round(maxDim / unit));
-  return {
-    width: 16 * ratioW * k,
-    height: 16 * ratioH * k,
-    ratioW,
-    ratioH
-  };
+function pickCompatibleI2vBoundingBox(refWidth, refHeight, desiredWidth, desiredHeight) {
+  const desiredW = Number.isFinite(Number(desiredWidth)) ? Number(desiredWidth) : 512;
+  const desiredH = Number.isFinite(Number(desiredHeight)) ? Number(desiredHeight) : 512;
+  const desiredMax = Math.max(MIN_VIDEO_DIMENSION, Math.min(MAX_VIDEO_DIMENSION, Math.max(desiredW, desiredH)));
+  let best = null;
+
+  for (let w = MIN_VIDEO_DIMENSION; w <= MAX_VIDEO_DIMENSION; w += VIDEO_DIMENSION_MULTIPLE) {
+    for (let h = MIN_VIDEO_DIMENSION; h <= MAX_VIDEO_DIMENSION; h += VIDEO_DIMENSION_MULTIPLE) {
+      const normalized = normalizeVideoDimensionsLikeWrapper(w, h);
+      if (!Number.isFinite(normalized.width) || !Number.isFinite(normalized.height)) continue;
+      const out = predictSharpInsideResizeDims(refWidth, refHeight, normalized.width, normalized.height);
+      if (!out) continue;
+      if (out.width % VIDEO_DIMENSION_MULTIPLE !== 0 || out.height % VIDEO_DIMENSION_MULTIPLE !== 0) continue;
+      if (out.width < MIN_VIDEO_DIMENSION || out.height < MIN_VIDEO_DIMENSION) continue;
+
+      const outMax = Math.max(out.width, out.height);
+      const distance = Math.abs(normalized.width - desiredW) + Math.abs(normalized.height - desiredH);
+      // Prefer a bounding box close to what the user asked for, then output close to requested max, then maximize output area.
+      const score = -distance * 1e9 - Math.abs(outMax - desiredMax) * 1e8 + out.width * out.height * 1e3 - (normalized.width * normalized.height);
+      if (!best || score > best.score) {
+        best = { width: normalized.width, height: normalized.height, output: out, score };
+      }
+    }
+  }
+
+  return best ? { width: best.width, height: best.height, output: best.output } : null;
 }
 
 const MULTI_ANGLE_AZIMUTHS = [
@@ -428,6 +501,7 @@ const options = {
   json: false,
   quiet: false,
   timeout: 30000,
+  strictSize: false,
   tokenType: null,
   steps: null,
   guidance: null,
@@ -467,6 +541,7 @@ const cliSet = {
   height: false,
   count: false,
   timeout: false,
+  strictSize: false,
   tokenType: false,
   steps: false,
   guidance: false,
@@ -648,6 +723,9 @@ for (let i = 0; i < args.length; i++) {
     process.exit(0);
   } else if (arg === '--json') {
     options.json = true;
+  } else if (arg === '--strict-size') {
+    options.strictSize = true;
+    cliSet.strictSize = true;
   } else if (arg === '-q' || arg === '--quiet') {
     options.quiet = true;
   } else if (arg === '--estimate-video-cost') {
@@ -708,6 +786,7 @@ General:
   --token-type <type>   Token type: spark|sogni (default: spark)
   --last                Show last render info (JSON)
   --json                Output JSON with all details
+  --strict-size         Do not auto-adjust video size to satisfy i2v reference resizing constraints
   -q, --quiet           Suppress progress output
 
 Image Models:
@@ -1060,12 +1139,11 @@ if (options.video) {
   }
 }
 
-// Video dimension constraints:
-// - API requires width/height divisible by 16
-// - i2v frequently fails if a non-square reference is fit into a square target (e.g. 512x512),
-//   because the aspect-fit resized dimension can land on a non-16-multiple (e.g. 499x512).
-// To make "just pass --ref" work, infer a compatible default size from the reference aspect ratio
-// when the user did not explicitly set width/height.
+// Video dimensions:
+// - Sogni video pipelines require dims within [480..1536] and divisible by 16.
+// - When using i2v (or any ref-based workflow), the Sogni client wrapper will *resize the reference image*
+//   with sharp `fit: inside` and then override the project width/height with the resized reference dims.
+//   That means a "valid" requested size can still fail if the resized ref lands on a non-16-multiple (e.g. 1024x1535).
 if (options.video) {
   if (!Number.isFinite(options.width) || options.width <= 0 || !Number.isFinite(options.height) || options.height <= 0) {
     fatalCliError('Video width/height must be positive numbers.', {
@@ -1073,12 +1151,17 @@ if (options.video) {
       details: { width: options.width, height: options.height }
     });
   }
-  if (options.width % 16 !== 0 || options.height % 16 !== 0) {
-    fatalCliError(`Video width and height must be divisible by 16 (got ${options.width}x${options.height}).`, {
-      code: 'INVALID_VIDEO_SIZE',
-      details: { width: options.width, height: options.height },
-      hint: 'Choose --width/--height divisible by 16. For i2v, also match the reference aspect ratio.'
-    });
+
+  const originalVideoWidth = options.width;
+  const originalVideoHeight = options.height;
+  const normalizedVideoDims = normalizeVideoDimensionsLikeWrapper(options.width, options.height);
+  options.width = normalizedVideoDims.width;
+  options.height = normalizedVideoDims.height;
+  if (normalizedVideoDims.adjusted && !options.quiet) {
+    console.error(
+      `Auto-adjusted video dimensions from ${originalVideoWidth}x${originalVideoHeight} ` +
+      `to ${options.width}x${options.height} to meet video requirements.`
+    );
   }
 
   if (
@@ -1091,36 +1174,104 @@ if (options.video) {
       const buffer = readFileSync(refPath);
       const dims = getImageDimensionsFromBuffer(buffer);
       if (dims?.width && dims?.height) {
-        const refAspect = dims.width / dims.height;
-        const targetAspect = options.width / options.height;
-        const aspectMismatch = Math.abs(Math.log(refAspect / targetAspect)) > 0.001;
+        const predicted = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
+        if (predicted) {
+          options._effectiveVideoDims = {
+            width: predicted.width,
+            height: predicted.height,
+            refWidth: dims.width,
+            refHeight: dims.height,
+            requestedWidth: options.width,
+            requestedHeight: options.height
+          };
+        }
 
-        if (!cliSet.width && !cliSet.height && aspectMismatch) {
-          const suggested = suggestVideoSizeForReference(dims.width, dims.height, Math.max(options.width, options.height));
-          options.width = suggested.width;
-          options.height = suggested.height;
-          if (!options.quiet) {
-            console.error(
-              `Auto-adjusted video size to ${options.width}x${options.height} ` +
-              `to match reference aspect ratio (${dims.width}x${dims.height}) and 16px constraints.`
-            );
+        if (predicted && (predicted.width % VIDEO_DIMENSION_MULTIPLE !== 0 || predicted.height % VIDEO_DIMENSION_MULTIPLE !== 0)) {
+          const candidate = pickCompatibleI2vBoundingBox(dims.width, dims.height, options.width, options.height);
+          if (!candidate) {
+            fatalCliError('Could not find a compatible video size for this reference image.', {
+              code: 'INVALID_VIDEO_SIZE',
+              details: {
+                reference: { width: dims.width, height: dims.height },
+                requested: { width: options.width, height: options.height },
+                resized: predicted
+              },
+              hint: 'Try a different --width/--height (multiples of 16) or disable auto-resize with --no-auto-resize-assets.'
+            });
           }
-        } else if ((cliSet.width || cliSet.height) && aspectMismatch) {
-          const fitted = computeAspectFitDimensions(dims.width, dims.height, options.width, options.height);
-          if (fitted && (fitted.width % 16 !== 0 || fitted.height % 16 !== 0)) {
-            const suggested = suggestVideoSizeForReference(dims.width, dims.height, Math.max(options.width, options.height));
+
+          if (!cliSet.width && !cliSet.height) {
+            const before = `${options.width}x${options.height}`;
+            options.width = candidate.width;
+            options.height = candidate.height;
+            const predicted2 = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
+            if (predicted2) {
+              options._effectiveVideoDims = {
+                width: predicted2.width,
+                height: predicted2.height,
+                refWidth: dims.width,
+                refHeight: dims.height,
+                requestedWidth: options.width,
+                requestedHeight: options.height
+              };
+            }
+            options._adjustedVideoDims = {
+              reason: 'i2v-ref-div16',
+              requested: { width: originalVideoWidth, height: originalVideoHeight },
+              adjusted: { width: options.width, height: options.height },
+              resizedFrom: predicted,
+              resizedTo: predicted2 || null
+            };
+            if (!options.quiet) {
+              console.error(
+                `Auto-adjusted i2v video size from ${before} to ${options.width}x${options.height} ` +
+                `so the resized reference is divisible by 16 (would have been ${predicted.width}x${predicted.height}).`
+              );
+            }
+          } else if (options.strictSize) {
             fatalCliError(
-              `Reference image ${dims.width}x${dims.height} does not match requested video size ${options.width}x${options.height}.`,
+              `Reference image ${dims.width}x${dims.height} would resize to ${predicted.width}x${predicted.height}, ` +
+              `but both dimensions must be divisible by 16.`,
               {
                 code: 'INVALID_VIDEO_SIZE',
                 details: {
                   reference: { width: dims.width, height: dims.height },
                   requested: { width: options.width, height: options.height },
-                  aspectFit: fitted
+                  resized: predicted
                 },
-                hint: `Try: --width ${suggested.width} --height ${suggested.height}`
+                hint: `Try: --width ${candidate.width} --height ${candidate.height} (or omit --strict-size)`
               }
             );
+          } else {
+            const beforeW = options.width;
+            const beforeH = options.height;
+            options.width = candidate.width;
+            options.height = candidate.height;
+            const predicted2 = predictSharpInsideResizeDims(dims.width, dims.height, options.width, options.height);
+            if (predicted2) {
+              options._effectiveVideoDims = {
+                width: predicted2.width,
+                height: predicted2.height,
+                refWidth: dims.width,
+                refHeight: dims.height,
+                requestedWidth: options.width,
+                requestedHeight: options.height
+              };
+            }
+            options._adjustedVideoDims = {
+              reason: 'i2v-ref-div16',
+              requested: { width: beforeW, height: beforeH },
+              adjusted: { width: options.width, height: options.height },
+              resizedFrom: predicted,
+              resizedTo: predicted2 || null
+            };
+            if (!options.quiet) {
+              console.error(
+                `Warning: Adjusted i2v video size from ${beforeW}x${beforeH} to ${options.width}x${options.height} ` +
+                `because the resized reference would be ${predicted.width}x${predicted.height} (not divisible by 16). ` +
+                `Use --strict-size to fail instead.`
+              );
+            }
           }
         }
       }
@@ -2122,6 +2273,7 @@ async function main() {
           output.fps = options.fps;
           output.duration = options.frames ? options.frames / options.fps : options.duration;
           if (options.frames) output.frames = options.frames;
+          output.strictSize = options.strictSize || false;
           if (options.autoResizeVideoAssets !== null) {
             output.autoResizeVideoAssets = options.autoResizeVideoAssets;
           }
@@ -2129,6 +2281,17 @@ async function main() {
           if (options.refImageEnd) output.refImageEnd = options.refImageEnd;
           if (options.refAudio) output.refAudio = options.refAudio;
           if (options.refVideo) output.refVideo = options.refVideo;
+          if (options._effectiveVideoDims?.width && options._effectiveVideoDims?.height) {
+            output.effectiveWidth = options._effectiveVideoDims.width;
+            output.effectiveHeight = options._effectiveVideoDims.height;
+            output.effectiveFromReference = {
+              width: options._effectiveVideoDims.refWidth,
+              height: options._effectiveVideoDims.refHeight
+            };
+          }
+          if (options._adjustedVideoDims) {
+            output.adjustedVideoDims = options._adjustedVideoDims;
+          }
         }
         if (options.contextImages.length > 0) {
           output.contextImages = options.contextImages;
@@ -2162,6 +2325,7 @@ async function main() {
         model: options.model || null,
         width: Number.isFinite(options.width) ? options.width : null,
         height: Number.isFinite(options.height) ? options.height : null,
+        strictSize: options.video ? (options.strictSize || false) : null,
         count: Number.isFinite(options.count) ? options.count : null,
         tokenType: options.tokenType || 'spark',
         fps: options.video ? options.fps : null,
@@ -2171,7 +2335,10 @@ async function main() {
         refImage: options.video ? (options.refImage ?? null) : null,
         refImageEnd: options.video ? (options.refImageEnd ?? null) : null,
         refAudio: options.video ? (options.refAudio ?? null) : null,
-        refVideo: options.video ? (options.refVideo ?? null) : null
+        refVideo: options.video ? (options.refVideo ?? null) : null,
+        effectiveWidth: options.video ? (options._effectiveVideoDims?.width ?? null) : null,
+        effectiveHeight: options.video ? (options._effectiveVideoDims?.height ?? null) : null,
+        adjustedVideoDims: options.video ? (options._adjustedVideoDims ?? null) : null
       };
       if (IS_OPENCLAW_INVOCATION) payload.openclaw = true;
       console.log(JSON.stringify(payload));

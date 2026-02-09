@@ -154,18 +154,11 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 
 ## Video Sizing Rules (Aspect Ratios)
 
-- Video `--width` and `--height` must both be divisible by 16.
-- For i2v (and any workflow using `--ref` / `--ref-end`), the reference image is aspect-fit into the requested video size. If the aspect ratios differ, the aspect-fit size can land on a non-16-multiple (for example `499x512`) and the job will fail.
-- If you omit `--width/--height` and your `--ref` is a local file, `sogni-gen` will auto-pick a compatible `width/height` that matches the reference aspect ratio and the 16px constraint.
-- If your `--ref` is a URL, `sogni-gen` cannot infer dimensions locally, so you should pass `--width/--height`.
-
-Manual sizing rule:
-
-- Let `g = gcd(refW, refH)`, `rw = refW/g`, `rh = refH/g`
-- Pick an integer `k >= 1`
-- Use `--width (16 * rw * k) --height (16 * rh * k)`
-
-Example: `1170x1200` reduces to `39:40`, so a compatible size near 512 is `--width 624 --height 640`.
+- Video dimensions are constrained by the API: min 480px, max 1536px, and both `--width`/`--height` must be divisible by 16.
+- The script auto-normalizes video sizes to satisfy those constraints.
+- For i2v (and any workflow using `--ref` / `--ref-end`), the client wrapper resizes the reference image with a strict aspect-fit (`fit: inside`) and then uses the *resized reference dimensions* as the final video size. Because that resize uses rounding, a “valid” requested size can still produce an invalid final size (example: `1024x1536` requested, but ref becomes `1024x1535`).
+- `sogni-gen` detects this for local refs and will auto-adjust the requested size to a nearby safe size so the resized reference is divisible by 16.
+- If you want the script to fail instead of auto-adjusting, pass `--strict-size` and it will print a suggested size.
 
 ## Error Reporting
 
@@ -220,6 +213,7 @@ Example: `1170x1200` reduces to `39:40`, so a compatible size near 512 is `--wid
 -c, --context <path>  Context image(s) for editing (repeatable)
 --last-image          Use last image as context/ref
 --json                JSON output
+--strict-size         Do not auto-adjust i2v video size for reference resizing constraints
 -q, --quiet           Suppress progress
 ```
 
