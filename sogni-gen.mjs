@@ -1680,6 +1680,16 @@ async function runImageEditProjectWithEvents(client, editConfig, expectedCount, 
   try {
     const projectResult = await client.createImageEditProject(editConfig);
     projectId = projectResult?.project?.id || projectId;
+
+    // Check for errors in the response (e.g., insufficient tokens)
+    if (projectResult?.error || projectResult?.message) {
+      cleanup();
+      throw new Error(projectResult.error || projectResult.message);
+    }
+    if (!projectId) {
+      cleanup();
+      throw new Error('Failed to create project: no project ID returned');
+    }
   } catch (error) {
     cleanup();
     throw error;
@@ -1969,6 +1979,12 @@ async function runMultiAngleFlow(client, log) {
         clipConfig.autoResizeVideoAssets = options.autoResizeVideoAssets;
       }
       const clipResult = await client.createVideoProject(clipConfig);
+
+      // Check for errors in the response (e.g., insufficient tokens)
+      if (clipResult?.error || clipResult?.message) {
+        throw new Error(clipResult.error || clipResult.message);
+      }
+
       const clipUrl = clipResult?.videoUrls?.[0];
       if (!clipUrl) {
         throw new Error('No video URL returned for 360 segment.');
@@ -2305,8 +2321,13 @@ async function main() {
       if (guidance !== null && guidance !== undefined) {
         projectConfig.guidance = guidance;
       }
-      
-      await client.createVideoProject(projectConfig);
+
+      const videoResult = await client.createVideoProject(projectConfig);
+
+      // Check for errors in the response (e.g., insufficient tokens)
+      if (videoResult?.error || videoResult?.message) {
+        throw new Error(videoResult.error || videoResult.message);
+      }
     } else if (options.contextImages.length > 0) {
       // Image editing with context images
       log(`Editing with ${options.model}...`);
@@ -2562,7 +2583,13 @@ async function main() {
             });
           });
 
-          await client2.createVideoProject(projectConfig2);
+          const clip2Result = await client2.createVideoProject(projectConfig2);
+
+          // Check for errors in the response (e.g., insufficient tokens)
+          if (clip2Result?.error || clip2Result?.message) {
+            throw new Error(clip2Result.error || clip2Result.message);
+          }
+
           await clip2Promise;
 
           log('Concatenating clips...');
