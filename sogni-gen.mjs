@@ -1578,9 +1578,9 @@ function buildAngles360Video(outputPath, frames, fps) {
 function extractLastFrameFromVideo(videoPath, outputImagePath) {
   const ffmpegPath = ensureFfmpegAvailable();
 
-  // Extract the last frame as PNG by seeking to 1 second before end
+  // Extract the actual last frame as PNG
   const args = [
-    '-sseof', '-1',  // Seek to 1 second from end
+    '-sseof', '-0.01',  // Seek to 0.01 seconds from end (essentially the last frame)
     '-i', videoPath,
     '-update', '1',  // Write single image
     '-frames:v', '1',
