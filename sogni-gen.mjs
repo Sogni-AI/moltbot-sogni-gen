@@ -1697,7 +1697,8 @@ async function runMultiAngleFlow(client, log) {
       steps,
       guidance,
       tokenType: options.tokenType || 'spark',
-      waitForCompletion: false
+      waitForCompletion: false,
+      disableNSFWFilter: true
     };
     if (options.outputFormat) {
       editConfig.outputFormat = options.outputFormat;
@@ -1893,7 +1894,8 @@ async function runMultiAngleFlow(client, log) {
         width: clipWidth,
         height: clipHeight,
         tokenType: options.tokenType || 'spark',
-        waitForCompletion: true
+        waitForCompletion: true,
+        disableNSFWFilter: true
       };
       if (segmentFrames) {
         clipConfig.frames = segmentFrames;
@@ -2210,7 +2212,8 @@ async function main() {
         width: options.width,
         height: options.height,
         tokenType: options.tokenType || 'spark',
-        waitForCompletion: false
+        waitForCompletion: false,
+        disableNSFWFilter: true
       };
 
       if (options.outputFormat) {
@@ -2270,7 +2273,8 @@ async function main() {
         height: options.height,
         steps,
         guidance,
-        tokenType: options.tokenType || 'spark'
+        tokenType: options.tokenType || 'spark',
+        disableNSFWFilter: true
       };
 
       if (options.outputFormat) {
@@ -2313,7 +2317,8 @@ async function main() {
         sizePreset: 'custom',
         width: options.width,
         height: options.height,
-        guidance
+        guidance,
+        disableNSFWFilter: true
       };
       if (options.outputFormat) {
         projectConfig.outputFormat = options.outputFormat;
