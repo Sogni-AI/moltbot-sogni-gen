@@ -58,6 +58,12 @@ node sogni-gen.mjs -o /tmp/cat.png "a cat wearing a hat"
 # JSON output (for scripting)
 node sogni-gen.mjs --json "a cat wearing a hat"
 
+# Check token balances (no prompt required)
+node sogni-gen.mjs --balance
+
+# Check token balances in JSON
+node sogni-gen.mjs --json --balance
+
 # Quiet mode (suppress progress)
 node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 ```
@@ -93,6 +99,7 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--lora-strength <n>` | LoRA strength (repeatable) | - |
 | `--lora-strengths <n>` | Comma-separated LoRA strengths | - |
 | `--token-type <type>` | Token type: spark\|sogni | spark |
+| `--balance, --balances` | Show SPARK/SOGNI balances and exit | - |
 | `-c, --context <path>` | Context image for editing | - |
 | `--last-image` | Use last generated image as context/ref | - |
 | `--video, -v` | Generate video instead of image | - |
@@ -329,6 +336,9 @@ node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -o /tmp/vide
 # Generate text-to-video
 node {{skillDir}}/sogni-gen.mjs -q --video -o /tmp/video.mp4 "ocean waves at sunset"
 
+# Check current SPARK/SOGNI balances (no prompt required)
+node {{skillDir}}/sogni-gen.mjs --json --balance
+
 # Then send via message tool with filePath
 ```
 
@@ -354,6 +364,17 @@ On error (with `--json`), the script returns a single JSON object like:
   "error": "Video width and height must be divisible by 16 (got 500x512).",
   "errorCode": "INVALID_VIDEO_SIZE",
   "hint": "Choose --width/--height divisible by 16. For i2v, also match the reference aspect ratio."
+}
+```
+
+Balance check example (`--json --balance`):
+
+```json
+{
+  "success": true,
+  "type": "balance",
+  "spark": 12.34,
+  "sogni": 0.56
 }
 ```
 

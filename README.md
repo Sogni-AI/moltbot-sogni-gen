@@ -105,6 +105,12 @@ node sogni-gen.mjs -o dragon.png "a dragon eating tacos"
 # JSON output
 node sogni-gen.mjs --json "a dragon eating tacos"
 
+# Check token balances (no prompt required)
+node sogni-gen.mjs --balance
+
+# Check token balances with JSON output
+node sogni-gen.mjs --json --balance
+
 # Different model
 node sogni-gen.mjs -m flux1-schnell-fp8 "a dragon eating tacos"
 
@@ -151,6 +157,7 @@ node sogni-gen.mjs --video --estimate-video-cost --steps 20 \
 
 Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles` LoRA.
 `--angles-360-video` generates i2v clips between consecutive angles (including last→first) and concatenates them with ffmpeg for a seamless loop.
+`--balance` / `--balances` does not require a prompt and exits after printing current `SPARK` and `SOGNI` balances.
 
 ## Video Sizing Rules (Aspect Ratios)
 
@@ -165,6 +172,7 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 - Exit code is non-zero on failure.
 - Default output is human-readable errors on stderr.
 - With `--json`, the script prints a single JSON object to stdout for both success and failure.
+  - For `--balance`, success output looks like: `{"success": true, "type": "balance", "spark": <number|null>, "sogni": <number|null>, ...}`
   - On failure: `{"success": false, "error": "...", "errorCode": "...?", "errorDetails": {...}?, "hint": "...?", "context": {...}?}`
 - When invoked by OpenClaw, errors are always returned as JSON (and also logged to stderr for humans).
 
@@ -198,6 +206,7 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 --lora-strength <n>   LoRA strength (repeatable)
 --lora-strengths <n>  Comma-separated LoRA strengths
 --token-type <type>   spark|sogni
+--balance, --balances Show SPARK/SOGNI balances and exit
 --video, -v           Generate video instead of image
 --workflow <type>     t2v|i2v|s2v|animate-move|animate-replace
 --fps <num>           Frames per second (video)

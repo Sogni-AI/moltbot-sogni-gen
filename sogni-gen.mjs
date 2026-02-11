@@ -586,6 +586,7 @@ const options = {
   frames: null,
   autoResizeVideoAssets: null,
   estimateVideoCost: false,
+  showBalance: false,
   angles360Video: null,
   refImage: null, // Reference image for video (start frame)
   refImageEnd: null, // End frame for video interpolation
@@ -793,6 +794,8 @@ for (let i = 0; i < args.length; i++) {
     options.quiet = true;
   } else if (arg === '--estimate-video-cost') {
     options.estimateVideoCost = true;
+  } else if (arg === '--balance' || arg === '--balances') {
+    options.showBalance = true;
   } else if (arg === '--help') {
     console.log(`
 sogni-gen - Generate images and videos using Sogni AI
@@ -848,6 +851,7 @@ General:
   --steps <num>         Override steps (model-dependent)
   --guidance <num>      Override guidance (model-dependent)
   --token-type <type>   Token type: spark|sogni (default: spark)
+  --balance, --balances Show SPARK/SOGNI balances and exit
   --last                Show last render info (JSON)
   --json                Output JSON with all details
   --strict-size         Do not auto-adjust video size to satisfy i2v reference resizing constraints
@@ -1162,7 +1166,7 @@ if (options.video) {
   options.model = options.model || openclawConfig?.defaultImageModel || 'z_image_turbo_bf16';
 }
 
-if (!options.prompt && !options.estimateVideoCost && !options.multiAngle) {
+if (!options.prompt && !options.estimateVideoCost && !options.multiAngle && !options.showBalance) {
   fatalCliError('No prompt provided. Use --help for usage.', { code: 'INVALID_ARGUMENT' });
 }
 
@@ -2110,6 +2114,26 @@ async function main() {
 
     await client.connect();
     log('Connected.');
+
+    if (options.showBalance) {
+      const balance = await client.getBalance();
+      const spark = Number.parseFloat(balance?.spark);
+      const sogni = Number.parseFloat(balance?.sogni);
+      if (options.json) {
+        console.log(JSON.stringify({
+          success: true,
+          type: 'balance',
+          spark: Number.isFinite(spark) ? spark : null,
+          sogni: Number.isFinite(sogni) ? sogni : null,
+          tokenType: options.tokenType || 'spark',
+          timestamp: new Date().toISOString()
+        }));
+      } else {
+        console.log(`SPARK: ${formatTokenValue(spark)}`);
+        console.log(`SOGNI: ${formatTokenValue(sogni)}`);
+      }
+      return;
+    }
 
     await ensureSufficientVideoBalance(client, log);
 
