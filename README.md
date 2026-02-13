@@ -16,7 +16,7 @@ This repo ships an `openclaw.plugin.json` manifest so OpenClaw can automatically
 
 ```bash
 # One command to install from GitHub
-openclaw plugins install git@github.com:Sogni-AI/moltbot-sogni-gen.git
+openclaw plugins install git@github.com:Sogni-AI/openclaw-sogni-gen.git
 
 # Or if published to npm
 openclaw plugins install sogni-gen
@@ -28,8 +28,8 @@ That's it! OpenClaw will handle the rest.
 
 ```bash
 # Clone the repository
-git clone git@github.com:Sogni-AI/moltbot-sogni-gen.git
-cd moltbot-sogni-gen
+git clone git@github.com:Sogni-AI/openclaw-sogni-gen.git
+cd openclaw-sogni-gen
 npm install
 ```
 

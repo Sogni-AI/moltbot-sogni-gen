@@ -1,0 +1,183 @@
+# sogni-gen — AI Image & Video Generation
+
+> OpenClaw plugin powered by Sogni AI's decentralized GPU network.
+> Repo: https://github.com/Sogni-AI/openclaw-sogni-gen
+
+## What It Does
+
+Generates AI images and videos from text prompts or reference media. Users ask you to "draw", "generate", "create an image/video", or "animate" something and you produce it.
+
+## Install
+
+```bash
+openclaw plugins install sogni-gen
+```
+
+Then create Sogni credentials:
+
+```bash
+mkdir -p ~/.config/sogni
+cat > ~/.config/sogni/credentials << 'EOF'
+SOGNI_USERNAME=your_username
+SOGNI_PASSWORD=your_password
+EOF
+chmod 600 ~/.config/sogni/credentials
+```
+
+Sign up at https://sogni.ai if you don't have an account. You get 50 free Spark tokens daily at https://app.sogni.ai/
+
+## How to Generate
+
+### Images
+
+```bash
+# Basic — returns a URL
+node {{skillDir}}/sogni-gen.mjs -q "a cat wearing a hat"
+
+# Save to file (then send via message tool with filePath)
+node {{skillDir}}/sogni-gen.mjs -q -o /tmp/generated.png "a cat wearing a hat"
+
+# Bigger image
+node {{skillDir}}/sogni-gen.mjs -q -o /tmp/out.png -w 1024 -h 1024 "a dragon eating tacos"
+
+# Higher quality (slower)
+node {{skillDir}}/sogni-gen.mjs -q -m flux2_dev_fp8 -o /tmp/out.png "portrait of a wizard"
+```
+
+### Image Editing (needs a reference image)
+
+```bash
+# Edit an existing image
+node {{skillDir}}/sogni-gen.mjs -q -c /path/to/photo.jpg -o /tmp/edited.png "make the background a beach"
+
+# Use last generated image as input
+node {{skillDir}}/sogni-gen.mjs -q --last-image -o /tmp/edited.png "make it pop art style"
+
+# Restore a damaged photo
+node {{skillDir}}/sogni-gen.mjs -q -c /path/to/old_photo.jpg -o /tmp/restored.png "restore this vintage photo, remove damage and scratches"
+```
+
+### Videos
+
+```bash
+# Text-to-video
+node {{skillDir}}/sogni-gen.mjs -q --video -o /tmp/video.mp4 "ocean waves at sunset"
+
+# Image-to-video (animate an image)
+node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/image.png -o /tmp/video.mp4 "camera slowly zooms in"
+
+# Looping video
+node {{skillDir}}/sogni-gen.mjs -q --video --looping --ref /path/to/image.png -o /tmp/loop.mp4 "gentle camera pan"
+
+# Longer video (10 seconds)
+node {{skillDir}}/sogni-gen.mjs -q --video --duration 10 --ref /path/to/image.png -o /tmp/video.mp4 "camera orbits around"
+
+# Sound-to-video (lip sync / talking head)
+node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/face.jpg --ref-audio /path/to/speech.m4a -o /tmp/talking.mp4 "talking head"
+
+# Motion transfer from another video
+node {{skillDir}}/sogni-gen.mjs -q --video --ref /path/to/subject.jpg --ref-video /path/to/motion.mp4 --workflow animate-move -o /tmp/animated.mp4 "transfer motion"
+```
+
+### 360 Turntable
+
+```bash
+# Generate 8 angles of a subject
+node {{skillDir}}/sogni-gen.mjs -q --angles-360 -c /path/to/subject.jpg "studio portrait"
+
+# 360 video (looping mp4, requires ffmpeg)
+node {{skillDir}}/sogni-gen.mjs -q --angles-360 --angles-360-video /tmp/turntable.mp4 -c /path/to/subject.jpg "studio portrait"
+```
+
+### Check Balance
+
+```bash
+node {{skillDir}}/sogni-gen.mjs --json --balance
+```
+
+## Image Models
+
+| Model | Speed | Best For |
+|-------|-------|----------|
+| z_image_turbo_bf16 | ~5-10s | Default, general purpose |
+| flux1-schnell-fp8 | ~3-5s | Quick iterations |
+| flux2_dev_fp8 | ~2min | Highest quality |
+| chroma-v.46-flash_fp8 | ~30s | Balanced speed/quality |
+| qwen_image_edit_2511_fp8_lightning | ~8s | Fast image editing (auto-selected with -c) |
+| qwen_image_edit_2511_fp8 | ~30s | Higher quality editing |
+
+## Video Models (auto-selected by workflow)
+
+| Workflow | Model | Speed |
+|----------|-------|-------|
+| t2v (text-to-video) | wan_v2.2-14b-fp8_t2v_lightx2v | ~5min |
+| i2v (image-to-video) | wan_v2.2-14b-fp8_i2v_lightx2v | ~3-5min |
+| s2v (sound-to-video) | wan_v2.2-14b-fp8_s2v_lightx2v | ~5min |
+| animate-move | wan_v2.2-14b-fp8_animate-move_lightx2v | ~5min |
+| animate-replace | wan_v2.2-14b-fp8_animate-replace_lightx2v | ~5min |
+
+## Key Flags
+
+| Flag | What It Does |
+|------|-------------|
+| -o /path | Save output to file |
+| -q | Quiet mode (suppress progress) |
+| -w, -h | Width/height in pixels (default 768x768) |
+| -m MODEL | Choose a specific model |
+| -c IMAGE | Context image for editing (repeatable, max 3) |
+| --video, -v | Generate video instead of image |
+| --ref IMAGE | Reference image for video |
+| --ref-audio FILE | Audio for lip sync (s2v) |
+| --ref-video FILE | Motion source for animate workflows |
+| --looping | Seamless A-B-A loop (i2v only) |
+| --duration SEC | Video length (default 5s) |
+| --fps NUM | Frames per second (default 16) |
+| --last-image | Reuse last generated image as input |
+| --json | Machine-readable JSON output |
+| --balance | Show Spark/Sogni token balances |
+
+## Agent Behavior Guidelines
+
+1. When the user asks to "draw", "generate", "create", or "make" an image: generate an image and send it.
+2. When they ask to "animate", "make a video", or "create a video": use --video mode.
+3. When they send a photo and ask to edit/change/modify it: use -c with their image.
+4. When they send a photo and ask to animate it: use --video --ref with their image.
+5. When they send a photo + audio and ask for lip sync: use --video --ref IMAGE --ref-audio AUDIO.
+6. Always use -q (quiet) and -o (output to file) so you can send the result back.
+7. After generating, send the file to the user via the message tool with filePath.
+8. If you get "Insufficient funds", tell them: "Claim 50 free daily Spark points at https://app.sogni.ai/"
+9. For transition/animation videos, always use this plugin (not ffmpeg) unless told otherwise.
+10. Default to 768x768 for images. Video sizes must be divisible by 16 (min 480px, max 1536px).
+
+## Finding User-Sent Media
+
+When users send images/audio via Telegram, WhatsApp, or iMessages:
+
+```bash
+# Recent inbound images
+ls -la ~/.clawdbot/media/inbound/*.jpg | tail -3
+ls -la ~/.clawdbot/media/inbound/*.png | tail -3
+
+# Recent inbound audio
+ls -la ~/.clawdbot/media/inbound/*.m4a | tail -3
+```
+
+## Example Conversations
+
+User: "Draw a sunset over mountains"
+You: Generate image, send it.
+
+User: *sends photo* "Make this look like a watercolor painting"
+You: Use -c with their photo, edit prompt, send result.
+
+User: *sends photo* "Animate this"
+You: Use --video --ref with their photo, send video.
+
+User: "Make a video of a cat playing piano"
+You: Use --video (t2v), send video.
+
+User: *sends photo + audio* "Make this person say this"
+You: Use --video --ref photo --ref-audio audio (s2v), send video.
+
+User: "Show me a 360 view of this" *sends photo*
+You: Use --angles-360 --angles-360-video with their photo, send video.

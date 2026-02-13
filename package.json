@@ -1,6 +1,6 @@
 {
   "name": "sogni-gen",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Sogni AI image generation plugin for OpenClaw",
   "type": "module",
   "main": "sogni-gen.mjs",
