@@ -593,7 +593,10 @@ const options = {
   refAudio: null, // Reference audio for s2v
   refVideo: null, // Reference video for animate workflows
   contextImages: [], // Context images for image editing
-  looping: false // Create looping video (i2v only): generate A→B then B→A and concatenate
+  looping: false, // Create looping video (i2v only): generate A→B then B→A and concatenate
+  photobooth: false, // Photobooth mode (InstantID face transfer)
+  cnStrength: null, // ControlNet strength override
+  cnGuidanceEnd: null // ControlNet guidance end override
 };
 const cliSet = {
   output: false,
@@ -630,7 +633,10 @@ const cliSet = {
   refImageEnd: false,
   refAudio: false,
   refVideo: false,
-  context: false
+  context: false,
+  photobooth: false,
+  cnStrength: false,
+  cnGuidanceEnd: false
 };
 
 // Parse CLI args
@@ -762,6 +768,15 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === '-c' || arg === '--context') {
     options.contextImages.push(args[++i]);
     cliSet.context = true;
+  } else if (arg === '--photobooth') {
+    options.photobooth = true;
+    cliSet.photobooth = true;
+  } else if (arg === '--cn-strength') {
+    options.cnStrength = parseFloat(args[++i]);
+    cliSet.cnStrength = true;
+  } else if (arg === '--cn-guidance-end') {
+    options.cnGuidanceEnd = parseFloat(args[++i]);
+    cliSet.cnGuidanceEnd = true;
   } else if (arg === '--last-image') {
     // Use image from last render as reference/context
     if (existsSync(LAST_RENDER_PATH)) {
@@ -830,6 +845,12 @@ Image Options:
   -c, --context <path>  Context image for editing (can use multiple)
   --last-image          Use last generated image as context
 
+Photobooth (Face Transfer):
+  --photobooth            Face transfer mode (InstantID + SDXL Turbo)
+  --ref <path|url>        Face image (required with --photobooth)
+  --cn-strength <n>       ControlNet strength (default: 0.8)
+  --cn-guidance-end <n>   ControlNet guidance end point (default: 0.3)
+
 Video Options:
   --video, -v           Generate video instead of image
   --workflow <type>     Video workflow: t2v|i2v|s2v|animate-move|animate-replace
@@ -885,6 +906,8 @@ Examples:
   sogni-gen --video --last-image "gentle camera pan"
   sogni-gen -c photo.jpg "make the background a beach" -m qwen_image_edit_2511_fp8
   sogni-gen -c subject.jpg -c style.jpg "apply the style to the subject"
+  sogni-gen --photobooth --ref face.jpg "80s fashion portrait"
+  sogni-gen --photobooth --ref face.jpg -n 4 "LinkedIn professional headshot"
 `);
     process.exit(0);
   } else if (!arg.startsWith('-') && !options.prompt) {
@@ -1142,6 +1165,8 @@ if (options._lastImagePath) {
     } else if (!options.quiet) {
       console.error('Warning: --last-image ignored for text-to-video workflow.');
     }
+  } else if (options.photobooth) {
+    if (!options.refImage) options.refImage = options._lastImagePath;
   } else {
     options.contextImages.push(options._lastImagePath);
   }
@@ -1155,6 +1180,14 @@ if (options.video) {
   options.model = options.model || cfgModel || VIDEO_WORKFLOW_DEFAULT_MODELS[options.videoWorkflow] || 'wan_v2.2-14b-fp8_i2v_lightx2v';
   if (!cliSet.timeout && !timeoutFromConfig && options.timeout === 30000) {
     options.timeout = 300000; // 5 min for video
+  }
+} else if (options.photobooth) {
+  // Photobooth uses SDXL Turbo + InstantID ControlNet
+  options.model = options.model || openclawConfig?.defaultPhotoboothModel || 'coreml-sogniXLturbo_alpha1_ad';
+  if (!cliSet.width) options.width = 1024;
+  if (!cliSet.height) options.height = 1024;
+  if (!cliSet.timeout && !timeoutFromConfig && options.timeout === 30000) {
+    options.timeout = 60000;
   }
 } else if (options.contextImages.length > 0) {
   // Use qwen edit model when context images provided (unless model explicitly set)
@@ -1174,6 +1207,18 @@ if (!options.video && (options.refAudio || options.refVideo || options.videoWork
   fatalCliError('Video-only options (--workflow/--frames/--ref-audio/--ref-video) require --video.', {
     code: 'INVALID_ARGUMENT'
   });
+}
+
+if (options.photobooth) {
+  if (!options.refImage) {
+    fatalCliError('--photobooth requires --ref <face-image>.', { code: 'INVALID_ARGUMENT' });
+  }
+  if (options.video) {
+    fatalCliError('--photobooth cannot be combined with --video.', { code: 'INVALID_ARGUMENT' });
+  }
+  if (options.contextImages.length > 0) {
+    fatalCliError('--photobooth cannot be combined with -c/--context.', { code: 'INVALID_ARGUMENT' });
+  }
 }
 
 if (options.video) {
@@ -2416,6 +2461,48 @@ async function main() {
       }
       
       await client.createImageEditProject(editConfig);
+    } else if (options.photobooth) {
+      // Photobooth: face transfer with InstantID ControlNet
+      log(`Photobooth with ${options.model}...`);
+      if (options.seed !== null && options.seed !== undefined) log(`Using seed: ${options.seed}`);
+
+      const faceBuffer = await fetchMediaBuffer(options.refImage);
+      const modelDefaults = getModelDefaults(options.model, openclawConfig);
+      const steps = options.steps ?? modelDefaults?.steps ?? 7;
+      const guidance = options.guidance ?? modelDefaults?.guidance ?? 2;
+
+      const projectConfig = {
+        modelId: options.model,
+        positivePrompt: options.prompt,
+        negativePrompt: '',
+        stylePrompt: '',
+        numberOfMedia: options.count,
+        tokenType: options.tokenType || 'spark',
+        waitForCompletion: false,
+        sizePreset: 'custom',
+        width: options.width,
+        height: options.height,
+        steps,
+        guidance,
+        disableNSFWFilter: true,
+        sampler: options.sampler || 'DPM++ SDE',
+        scheduler: options.scheduler || 'Karras',
+        controlNet: {
+          name: 'instantid',
+          image: faceBuffer,
+          strength: options.cnStrength ?? 0.8,
+          mode: 'balanced',
+          guidanceStart: 0,
+          guidanceEnd: options.cnGuidanceEnd ?? 0.3,
+        }
+      };
+
+      if (options.outputFormat) projectConfig.outputFormat = options.outputFormat;
+      if (options.seed !== null && options.seed !== undefined) projectConfig.seed = options.seed;
+      if (options.loras.length > 0) projectConfig.loras = options.loras;
+      if (options.loraStrengths.length > 0) projectConfig.loraStrengths = options.loraStrengths;
+
+      await client.createImageProject(projectConfig);
     } else {
       // Standard image generation
       log(`Generating with ${options.model}...`);
@@ -2512,6 +2599,10 @@ async function main() {
       }
       if (options.contextImages.length > 0) {
         renderInfo.contextImages = options.contextImages;
+      }
+      if (options.photobooth) {
+        renderInfo.photobooth = true;
+        renderInfo.refImage = options.refImage;
       }
       saveLastRender(renderInfo);
       
@@ -2699,6 +2790,15 @@ async function main() {
         }
         if (options.contextImages.length > 0) {
           output.contextImages = options.contextImages;
+        }
+        if (options.photobooth) {
+          output.photobooth = true;
+          output.refImage = options.refImage;
+          output.controlNet = {
+            name: 'instantid',
+            strength: options.cnStrength ?? 0.8,
+            guidanceEnd: options.cnGuidanceEnd ?? 0.3,
+          };
         }
         console.log(JSON.stringify(output));
       } else {
