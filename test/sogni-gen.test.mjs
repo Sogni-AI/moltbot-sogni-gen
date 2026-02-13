@@ -173,6 +173,44 @@ test('i2v auto-adjust handles near-matching aspects that still round to a non-16
   assert.equal(state.lastVideoProject.height, 720);
 });
 
+test('--balance with --json returns balance information', () => {
+  const { exitCode, stdout } = runCli(['--json', '--balance']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.type, 'balance');
+  assert.equal(payload.spark, 100);
+  assert.equal(payload.sogni, 100);
+  assert.ok(payload.tokenType);
+  assert.ok(payload.timestamp);
+});
+
+test('--balances (alias) with --json returns balance information', () => {
+  const { exitCode, stdout } = runCli(['--json', '--balances']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.type, 'balance');
+  assert.equal(payload.spark, 100);
+  assert.equal(payload.sogni, 100);
+});
+
+test('--balance without --json displays human-readable output', () => {
+  const { exitCode, stdout } = runCli(['--balance']);
+  assert.equal(exitCode, 0);
+  assert.ok(stdout.includes('SPARK:'));
+  assert.ok(stdout.includes('SOGNI:'));
+  assert.ok(stdout.includes('100'));
+});
+
+test('--balance does not require a prompt', () => {
+  const { exitCode, stdout } = runCli(['--json', '--balance']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.type, 'balance');
+});
+
 test('json error: i2v explicit size that rounds to non-16 suggests a compatible bbox', async () => {
   const { default: sharp } = await import('sharp');
   const tmp = mkdtempSync(join(tmpdir(), 'sogni-gen-ref-'));
