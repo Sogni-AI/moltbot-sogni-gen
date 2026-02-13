@@ -12,7 +12,15 @@ An [OpenClaw](https://github.com/OpenClaw/OpenClaw) plugin for AI image + video 
 
 ### Quick Install (OpenClaw) - Recommended
 
-This repo ships an `openclaw.plugin.json` manifest so OpenClaw can automatically download and set everything up:
+Point your OpenClaw to the [`llm.txt`](https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/llm.txt) and everything is set up — just paste the URL into Telegram, WhatsApp, or iMessages and the bot handles image and video generation automatically.
+
+```
+https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/llm.txt
+```
+
+### Plugin Install
+
+This repo also ships an `openclaw.plugin.json` manifest so OpenClaw can automatically download and set everything up:
 
 ```bash
 # One command to install from GitHub
@@ -21,8 +29,6 @@ openclaw plugins install git@github.com:Sogni-AI/openclaw-sogni-gen.git
 # Or if published to npm
 openclaw plugins install sogni-gen
 ```
-
-That's it! OpenClaw will handle the rest.
 
 ### Manual Installation
 
