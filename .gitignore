@@ -70,5 +70,10 @@ out
 test-*.mjs
 debug-*.mjs
 
+# Desktop extension build artifacts
+*.mcpb
+desktop-extension/server/node_modules/
+desktop-extension/server/package-lock.json
+
 # Claude Code local config
 .claude/
