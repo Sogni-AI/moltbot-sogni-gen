@@ -18,7 +18,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 
 // ---------------------------------------------------------------------------
@@ -29,6 +29,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SOGNI_GEN = join(__dirname, 'sogni-gen.mjs');
 const CREDENTIALS_PATH = join(homedir(), '.config', 'sogni', 'credentials');
+const SERVER_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8'));
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // CLI spawning helper
@@ -206,6 +214,15 @@ function formatError(result) {
 async function formatResult(result) {
   if (result.success === false) return formatError(result);
   return formatSuccess(result);
+}
+
+async function runAndFormat(args, { timeoutMs = 30_000, requireCredentials = true } = {}) {
+  if (requireCredentials) {
+    const credErr = checkCredentials();
+    if (credErr) return credErr;
+  }
+  const result = await runSogniGen(args, { timeoutMs });
+  return formatResult(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -488,6 +505,14 @@ The face likeness is preserved while applying the style from the prompt.`,
       properties: {},
     },
   },
+  {
+    name: 'get_version',
+    description: 'Show the running sogni-gen version for this MCP server instance.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -495,9 +520,6 @@ The face likeness is preserved while applying the style from the prompt.`,
 // ---------------------------------------------------------------------------
 
 async function handleGenerateImage(params) {
-  const credErr = checkCredentials();
-  if (credErr) return credErr;
-
   const args = [params.prompt];
   if (params.model) args.push('-m', params.model);
   if (params.width) args.push('-w', String(params.width));
@@ -509,14 +531,10 @@ async function handleGenerateImage(params) {
   if (params.loras?.length) args.push('--loras', params.loras.join(','));
   if (params.lora_strengths?.length) args.push('--lora-strengths', params.lora_strengths.join(','));
 
-  const result = await runSogniGen(args, { timeoutMs: 60_000 });
-  return formatResult(result);
+  return runAndFormat(args, { timeoutMs: 60_000 });
 }
 
 async function handleGenerateVideo(params) {
-  const credErr = checkCredentials();
-  if (credErr) return credErr;
-
   const args = ['--video', params.prompt];
   if (params.workflow) args.push('--workflow', params.workflow);
   if (params.model) args.push('-m', params.model);
@@ -533,14 +551,10 @@ async function handleGenerateVideo(params) {
   if (params.output) args.push('-o', params.output);
   if (params.looping) args.push('--looping');
 
-  const result = await runSogniGen(args, { timeoutMs: 600_000 });
-  return formatResult(result);
+  return runAndFormat(args, { timeoutMs: 600_000 });
 }
 
 async function handleEditImage(params) {
-  const credErr = checkCredentials();
-  if (credErr) return credErr;
-
   const args = [];
   for (const img of params.context_images) {
     args.push('-c', img);
@@ -551,14 +565,10 @@ async function handleEditImage(params) {
   if (params.height) args.push('-h', String(params.height));
   if (params.output) args.push('-o', params.output);
 
-  const result = await runSogniGen(args, { timeoutMs: 60_000 });
-  return formatResult(result);
+  return runAndFormat(args, { timeoutMs: 60_000 });
 }
 
 async function handlePhotobooth(params) {
-  const credErr = checkCredentials();
-  if (credErr) return credErr;
-
   const args = ['--photobooth', '--ref', params.reference_face, params.prompt];
   if (params.model) args.push('-m', params.model);
   if (params.cn_strength != null) args.push('--cn-strength', String(params.cn_strength));
@@ -568,16 +578,22 @@ async function handlePhotobooth(params) {
   if (params.count) args.push('-n', String(params.count));
   if (params.output) args.push('-o', params.output);
 
-  const result = await runSogniGen(args, { timeoutMs: 60_000 });
-  return formatResult(result);
+  return runAndFormat(args, { timeoutMs: 60_000 });
 }
 
 async function handleCheckBalance() {
-  const credErr = checkCredentials();
-  if (credErr) return credErr;
+  return runAndFormat(['--balance'], { timeoutMs: 30_000 });
+}
 
-  const result = await runSogniGen(['--balance'], { timeoutMs: 30_000 });
-  return formatResult(result);
+async function handleGetVersion() {
+  const result = await runSogniGen(['--version'], { timeoutMs: 5_000 });
+  if (result.success === false) return formatError(result);
+  return {
+    content: [{
+      type: 'text',
+      text: `mcp-server version: ${SERVER_VERSION}\nsogni-gen version: ${result.version || 'unknown'}`,
+    }],
+  };
 }
 
 function handleListModels() {
@@ -602,7 +618,7 @@ Defaults:
 // ---------------------------------------------------------------------------
 
 const server = new Server(
-  { name: 'sogni', version: '1.3.0' },
+  { name: 'sogni', version: SERVER_VERSION },
   { capabilities: { tools: {} } },
 );
 
@@ -624,6 +640,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return await handleCheckBalance();
       case 'list_models':
         return handleListModels();
+      case 'get_version':
+        return await handleGetVersion();
       default:
         return {
           content: [{ type: 'text', text: `Unknown tool: ${name}` }],

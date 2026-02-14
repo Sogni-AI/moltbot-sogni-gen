@@ -21,6 +21,7 @@ const currentNodeVersion = process.versions.node.split('.').map((part) => Number
 if (!isVersionAtLeast(currentNodeVersion, MIN_NODE_VERSION)) {
   throw new Error(`Node >= ${MIN_NODE_VERSION.join('.')} is required. Current: ${process.versions.node}`);
 }
+const PACKAGE_VERSION = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8')).version;
 
 function runCli(args) {
   const tempHome = mkdtempSync(join(tmpdir(), 'sogni-gen-test-'));
@@ -74,6 +75,23 @@ test('default image generation uses 512x512 and prompt', () => {
   assert.equal(state.lastImageProject.positivePrompt, 'a cat wearing a hat');
   assert.equal(state.lastImageProject.tokenType, 'spark');
   assert.equal(state.lastImageProject.sizePreset, 'custom');
+});
+
+test('--version returns current package version', () => {
+  const { exitCode, stdout } = runCli(['--version']);
+  assert.equal(exitCode, 0);
+  assert.equal(stdout.trim(), PACKAGE_VERSION);
+});
+
+test('--version with --json returns structured version information', () => {
+  const { exitCode, stdout } = runCli(['--json', '--version']);
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.trim());
+  assert.equal(payload.success, true);
+  assert.equal(payload.type, 'version');
+  assert.equal(payload.name, 'sogni-gen');
+  assert.equal(payload.version, PACKAGE_VERSION);
+  assert.ok(payload.timestamp);
 });
 
 test('explicit 512x512, output format, and seed are applied', () => {

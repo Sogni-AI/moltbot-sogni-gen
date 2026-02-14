@@ -41,6 +41,33 @@ Restart Claude Desktop after saving. The same natural-language commands work.
 
 > **Note:** Both Claude Code and Claude Desktop require Sogni credentials — see [Setup](#setup) below.
 
+### Global npm Install (CLI + MCP)
+
+```bash
+npm install -g sogni-gen
+sogni-gen --version
+```
+
+If `sogni-gen-mcp` is on your `PATH`, you can register it directly:
+
+```bash
+# Claude Code using globally installed binary
+claude mcp add sogni -- sogni-gen-mcp
+```
+
+Claude Desktop config using global binary:
+
+```json
+{
+  "mcpServers": {
+    "sogni": {
+      "command": "sogni-gen-mcp",
+      "args": []
+    }
+  }
+}
+```
+
 ### Quick Install (OpenClaw) - Recommended
 
 Point your OpenClaw to the [`llm.txt`](https://raw.githubusercontent.com/Sogni-AI/openclaw-sogni-gen/main/llm.txt) and everything is set up — just paste the URL into Telegram, WhatsApp, or iMessages and the bot handles image and video generation automatically.
@@ -269,6 +296,7 @@ Multi-angle mode auto-builds the `<sks>` prompt and applies the `multiple_angles
 --lora-strengths <n>  Comma-separated LoRA strengths
 --token-type <type>   spark|sogni
 --balance, --balances Show SPARK/SOGNI balances and exit
+--version, -V         Show sogni-gen version and exit
 --video, -v           Generate video instead of image
 --workflow <type>     t2v|i2v|s2v|animate-move|animate-replace
 --fps <num>           Frames per second (video)

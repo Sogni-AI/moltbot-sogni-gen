@@ -19,6 +19,14 @@ const IS_OPENCLAW_INVOCATION = Boolean(process.env.OPENCLAW_PLUGIN_CONFIG);
 const RAW_ARGS = process.argv.slice(2);
 const CLI_WANTS_JSON = RAW_ARGS.includes('--json');
 const JSON_ERROR_MODE = CLI_WANTS_JSON || IS_OPENCLAW_INVOCATION;
+const PACKAGE_VERSION = (() => {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+    return pkg.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+})();
 const VIDEO_WORKFLOW_DEFAULT_MODELS = {
   't2v': 'wan_v2.2-14b-fp8_t2v_lightx2v',
   'i2v': 'wan_v2.2-14b-fp8_i2v_lightx2v',
@@ -587,6 +595,7 @@ const options = {
   autoResizeVideoAssets: null,
   estimateVideoCost: false,
   showBalance: false,
+  showVersion: false,
   angles360Video: null,
   refImage: null, // Reference image for video (start frame)
   refImageEnd: null, // End frame for video interpolation
@@ -811,6 +820,8 @@ for (let i = 0; i < args.length; i++) {
     options.estimateVideoCost = true;
   } else if (arg === '--balance' || arg === '--balances') {
     options.showBalance = true;
+  } else if (arg === '--version' || arg === '-V') {
+    options.showVersion = true;
   } else if (arg === '--help') {
     console.log(`
 sogni-gen - Generate images and videos using Sogni AI
@@ -873,6 +884,7 @@ General:
   --guidance <num>      Override guidance (model-dependent)
   --token-type <type>   Token type: spark|sogni (default: spark)
   --balance, --balances Show SPARK/SOGNI balances and exit
+  --version, -V         Show sogni-gen version and exit
   --last                Show last render info (JSON)
   --json                Output JSON with all details
   --strict-size         Do not auto-adjust video size to satisfy i2v reference resizing constraints
@@ -1199,7 +1211,7 @@ if (options.video) {
   options.model = options.model || openclawConfig?.defaultImageModel || 'z_image_turbo_bf16';
 }
 
-if (!options.prompt && !options.estimateVideoCost && !options.multiAngle && !options.showBalance) {
+if (!options.prompt && !options.estimateVideoCost && !options.multiAngle && !options.showBalance && !options.showVersion) {
   fatalCliError('No prompt provided. Use --help for usage.', { code: 'INVALID_ARGUMENT' });
 }
 
@@ -1452,7 +1464,7 @@ if (options.lastSeed) {
   }
 }
 
-if (!options.estimateVideoCost && (options.seed === null || options.seed === undefined)) {
+if (!options.estimateVideoCost && !options.showVersion && (options.seed === null || options.seed === undefined)) {
   const strategy = options.seedStrategy || openclawConfig?.seedStrategy || 'prompt-hash';
   const normalized = normalizeSeedStrategy(strategy) || 'prompt-hash';
   options.seedStrategy = normalized;
@@ -2163,6 +2175,21 @@ async function main() {
   let client = null;
   
   try {
+    if (options.showVersion) {
+      if (options.json) {
+        console.log(JSON.stringify({
+          success: true,
+          type: 'version',
+          name: 'sogni-gen',
+          version: PACKAGE_VERSION,
+          timestamp: new Date().toISOString()
+        }));
+      } else {
+        console.log(PACKAGE_VERSION);
+      }
+      return;
+    }
+
     const creds = loadCredentials();
     log('Connecting to Sogni...');
     client = new SogniClientWrapper({
