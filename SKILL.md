@@ -381,6 +381,41 @@ node {{skillDir}}/sogni-gen.mjs --json --balance
 # Then send via message tool with filePath
 ```
 
+## Animate Between Two Images (First-Frame / Last-Frame)
+
+When a user asks to **animate between two images**, use `--ref` (first frame) and `--ref-end` (last frame) to create a creative interpolation video:
+
+```bash
+# Animate from image A to image B
+node {{skillDir}}/sogni-gen.mjs -q --video --ref /tmp/imageA.png --ref-end /tmp/imageB.png -o /tmp/transition.mp4 "descriptive prompt of the transition"
+```
+
+### Animate a Video to an Image (Scene Continuation)
+
+When a user asks to **animate from a video to an image** (or "continue" a video into a new scene):
+
+1. **Extract the last frame** of the existing video:
+   ```bash
+   ffmpeg -y -sseof -0.1 -i /tmp/existing.mp4 -frames:v 1 -update 1 /tmp/lastframe.png
+   ```
+2. **Generate a new video** using the last frame as `--ref` and the target image as `--ref-end`:
+   ```bash
+   node {{skillDir}}/sogni-gen.mjs -q --video --ref /tmp/lastframe.png --ref-end /tmp/target.png -o /tmp/continuation.mp4 "scene transition prompt"
+   ```
+3. **Stitch the videos** together with ffmpeg:
+   ```bash
+   ffmpeg -y -i /tmp/existing.mp4 -i /tmp/continuation.mp4 \
+     -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[outv]" \
+     -map "[outv]" -c:v libx264 -crf 18 /tmp/full_sequence.mp4
+   ```
+
+This ensures visual continuity — the new clip picks up exactly where the previous one ended.
+
+**Always apply this pattern when:**
+- User says "animate image A to image B" → use `--ref A --ref-end B`
+- User says "animate this video to this image" → extract last frame, use as `--ref`, target image as `--ref-end`, then stitch
+- User says "continue this video" with a target image → same as above
+
 ## JSON Output
 
 ```json
