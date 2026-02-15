@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="screenshot.jpg" alt="Telegram image render workflow" width="320" />
+  <img src="docs/screenshot.jpg" alt="Telegram image render workflow" width="320" />
 </p>
 
 # Sogni Gen — AI Image & Video Generation
