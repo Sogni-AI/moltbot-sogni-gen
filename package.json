@@ -1,6 +1,6 @@
 {
   "name": "sogni-gen",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Sogni AI image & video generation — OpenClaw plugin and MCP server for Claude Code / Claude Desktop",
   "type": "module",
   "main": "sogni-gen.mjs",
@@ -47,7 +47,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@sogni-ai/sogni-client-wrapper": "^1.4.2",
+    "@sogni-ai/sogni-client-wrapper": "^1.4.3",
     "json5": "^2.2.3",
     "sharp": "^0.34.5"
   },

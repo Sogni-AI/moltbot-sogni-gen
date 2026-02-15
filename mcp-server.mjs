@@ -240,12 +240,18 @@ const IMAGE_MODEL_TABLE = `Image Models:
   qwen_image_edit_2511_fp8   — Medium (~30s), image editing with context
   qwen_image_edit_2511_fp8_lightning — Fast (~8s), quick image editing`;
 
-const VIDEO_MODEL_TABLE = `Video Models (auto-selected per workflow):
+const VIDEO_MODEL_TABLE = `WAN 2.2 Video Models (auto-selected per workflow):
   wan_v2.2-14b-fp8_t2v_lightx2v             — Text-to-video (~5min)
   wan_v2.2-14b-fp8_i2v_lightx2v             — Image-to-video (~3-5min)
   wan_v2.2-14b-fp8_s2v_lightx2v             — Sound-to-video (~5min)
   wan_v2.2-14b-fp8_animate-move_lightx2v    — Animate-move (~5min)
-  wan_v2.2-14b-fp8_animate-replace_lightx2v — Animate-replace (~5min)`;
+  wan_v2.2-14b-fp8_animate-replace_lightx2v — Animate-replace (~5min)
+
+LTX-2 Video Models:
+  ltx2-19b-fp8_t2v_distilled              — Text-to-video, fast 8-step (~2-3min)
+  ltx2-19b-fp8_t2v                        — Text-to-video, quality 20-step (~5min)
+  ltx2-19b-fp8_v2v_distilled              — Video-to-video with ControlNet (~3min)
+  ltx2-19b-fp8_v2v                        — Video-to-video with ControlNet, quality (~5min)`;
 
 const TOOLS = [
   {
@@ -313,13 +319,14 @@ Workflows:
   t2v             — Text-to-video (default). Just provide a prompt.
   i2v             — Image-to-video. Provide ref (reference image). Supports looping.
   s2v             — Sound-to-video. Provide ref (face image) + ref_audio.
+  v2v             — Video-to-video (LTX-2). Provide ref_video + controlnet_name.
   animate-move    — Transfer motion from ref_video to ref image.
   animate-replace — Replace subject in ref_video with ref image.
 
 ${VIDEO_MODEL_TABLE}
 
-Video dimensions must be divisible by 16, min 480px, max 1536px. Generation takes 3-5 minutes.
-Cost: Uses Spark tokens. Claim 50 free daily Spark at https://app.sogni.ai/`,
+WAN video dimensions: divisible by 16, min 480px, max 1536px. LTX-2: divisible by 64, 768-1920px.
+Generation takes 3-5 minutes. Cost: Uses Spark tokens. Claim 50 free daily Spark at https://app.sogni.ai/`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -329,7 +336,7 @@ Cost: Uses Spark tokens. Claim 50 free daily Spark at https://app.sogni.ai/`,
         },
         workflow: {
           type: 'string',
-          enum: ['t2v', 'i2v', 's2v', 'animate-move', 'animate-replace'],
+          enum: ['t2v', 'i2v', 's2v', 'v2v', 'animate-move', 'animate-replace'],
           description: 'Video workflow (default: t2v, auto-inferred from provided refs)',
         },
         model: {
@@ -370,7 +377,32 @@ Cost: Uses Spark tokens. Claim 50 free daily Spark at https://app.sogni.ai/`,
         },
         ref_video: {
           type: 'string',
-          description: 'Reference video file path (for animate workflows)',
+          description: 'Reference video file path (for animate and v2v workflows)',
+        },
+        controlnet_name: {
+          type: 'string',
+          enum: ['canny', 'pose', 'depth', 'detailer'],
+          description: 'ControlNet type for v2v workflow',
+        },
+        controlnet_strength: {
+          type: 'number',
+          description: 'ControlNet strength for v2v (0.0-1.0, default: 0.8)',
+        },
+        sam2_coordinates: {
+          type: 'string',
+          description: 'SAM2 click coordinates for animate-replace (x,y or x1,y1;x2,y2)',
+        },
+        trim_end_frame: {
+          type: 'boolean',
+          description: 'Trim last frame for seamless video stitching',
+        },
+        first_frame_strength: {
+          type: 'number',
+          description: 'Keyframe strength for start frame (0.0-1.0)',
+        },
+        last_frame_strength: {
+          type: 'number',
+          description: 'Keyframe strength for end frame (0.0-1.0)',
         },
         seed: {
           type: 'number',
@@ -550,6 +582,12 @@ async function handleGenerateVideo(params) {
   if (params.ref_end) args.push('--ref-end', params.ref_end);
   if (params.ref_audio) args.push('--ref-audio', params.ref_audio);
   if (params.ref_video) args.push('--ref-video', params.ref_video);
+  if (params.controlnet_name) args.push('--controlnet-name', params.controlnet_name);
+  if (params.controlnet_strength != null) args.push('--controlnet-strength', String(params.controlnet_strength));
+  if (params.sam2_coordinates) args.push('--sam2-coordinates', params.sam2_coordinates);
+  if (params.trim_end_frame) args.push('--trim-end-frame');
+  if (params.first_frame_strength != null) args.push('--first-frame-strength', String(params.first_frame_strength));
+  if (params.last_frame_strength != null) args.push('--last-frame-strength', String(params.last_frame_strength));
   if (params.seed != null) args.push('-s', String(params.seed));
   if (params.output) args.push('-o', params.output);
   if (params.looping) args.push('--looping');
@@ -611,7 +649,7 @@ Defaults:
   Image generation: z_image_turbo_bf16
   Image editing:    qwen_image_edit_2511_fp8_lightning
   Photobooth:       coreml-sogniXLturbo_alpha1_ad
-  Video:            auto-selected per workflow (t2v/i2v/s2v/animate-move/animate-replace)`;
+  Video:            auto-selected per workflow (t2v/i2v/s2v/v2v/animate-move/animate-replace)`;
 
   return { content: [{ type: 'text', text }] };
 }

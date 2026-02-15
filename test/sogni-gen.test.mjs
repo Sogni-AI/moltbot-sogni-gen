@@ -373,3 +373,70 @@ test('json error: i2v explicit size that rounds to non-16 suggests a compatible 
   assert.equal(payload.errorCode, 'INVALID_VIDEO_SIZE');
   assert.ok(String(payload.hint || '').includes('--width 1024 --height 1296'));
 });
+
+// --- v2v workflow tests ---
+
+test('v2v requires --ref-video', () => {
+  expectCliError(
+    ['--video', '--workflow', 'v2v', '--controlnet-name', 'canny', 'a cat'],
+    'v2v requires --ref-video.'
+  );
+});
+
+test('v2v requires --controlnet-name', () => {
+  expectCliError(
+    ['--video', '--workflow', 'v2v', '--ref-video', 'video.mp4', 'a cat'],
+    'v2v requires --controlnet-name'
+  );
+});
+
+test('v2v rejects reference audio', () => {
+  expectCliError(
+    ['--video', '--workflow', 'v2v', '--ref-video', 'video.mp4', '--controlnet-name', 'canny', '--ref-audio', 'audio.m4a', 'a cat'],
+    'v2v does not accept reference audio.'
+  );
+});
+
+test('v2v is recognized as a valid workflow', () => {
+  // Should fail due to missing --ref-video, NOT unknown workflow
+  const { exitCode, stderr } = runCli(['--video', '--workflow', 'v2v', '--controlnet-name', 'canny', 'a cat']);
+  assert.equal(exitCode, 1);
+  assert.ok(!stderr.includes('Unknown workflow'), `Should not report unknown workflow, got: ${stderr}`);
+  assert.ok(stderr.includes('v2v requires --ref-video'), `Expected v2v validation error, got: ${stderr}`);
+});
+
+test('invalid --controlnet-name returns a validation error', () => {
+  expectCliError(
+    ['--video', '--workflow', 'v2v', '--ref-video', 'video.mp4', '--controlnet-name', 'invalid', 'a cat'],
+    'Unknown --controlnet-name "invalid"'
+  );
+});
+
+test('valid --controlnet-name values are accepted (canny)', () => {
+  // This should fail due to missing ref-video file, NOT controlnet validation
+  const { stderr } = runCli(['--video', '--workflow', 'v2v', '--ref-video', 'nonexistent.mp4', '--controlnet-name', 'canny', 'a cat']);
+  assert.ok(!stderr.includes('Unknown --controlnet-name'), `Should accept canny, got: ${stderr}`);
+});
+
+test('--sam2-coordinates is only supported with animate-replace', () => {
+  expectCliError(
+    ['--video', '--workflow', 't2v', '--sam2-coordinates', '100,200', 'a cat'],
+    '--sam2-coordinates is only supported with animate-replace'
+  );
+});
+
+test('--trim-end-frame flag is recognized', () => {
+  // Should not fail with unknown option
+  const { stderr } = runCli(['--video', '--trim-end-frame', 'a cat']);
+  assert.ok(!stderr.includes('Unknown option: --trim-end-frame'), `Should recognize --trim-end-frame, got: ${stderr}`);
+});
+
+test('--first-frame-strength and --last-frame-strength flags are recognized', () => {
+  const { stderr } = runCli(['--video', '--first-frame-strength', '0.6', '--last-frame-strength', '0.8', 'a cat']);
+  assert.ok(!stderr.includes('Unknown option'), `Should recognize frame strength flags, got: ${stderr}`);
+});
+
+test('--controlnet-strength flag is recognized', () => {
+  const { stderr } = runCli(['--video', '--workflow', 'v2v', '--ref-video', 'vid.mp4', '--controlnet-name', 'canny', '--controlnet-strength', '0.7', 'a cat']);
+  assert.ok(!stderr.includes('Unknown option: --controlnet-strength'), `Should recognize --controlnet-strength, got: ${stderr}`);
+});

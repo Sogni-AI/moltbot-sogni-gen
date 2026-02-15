@@ -103,7 +103,7 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `-c, --context <path>` | Context image for editing | - |
 | `--last-image` | Use last generated image as context/ref | - |
 | `--video, -v` | Generate video instead of image | - |
-| `--workflow <type>` | Video workflow (t2v|i2v|s2v|animate-move|animate-replace) | inferred |
+| `--workflow <type>` | Video workflow (t2v\|i2v\|s2v\|v2v\|animate-move\|animate-replace) | inferred |
 | `--fps <num>` | Frames per second (video) | 16 |
 | `--duration <sec>` | Duration in seconds (video) | 5 |
 | `--frames <num>` | Override total frames (video) | - |
@@ -116,7 +116,13 @@ node sogni-gen.mjs -q -o /tmp/cat.png "a cat wearing a hat"
 | `--ref <path>` | Reference image for video or photobooth face | required for video/photobooth |
 | `--ref-end <path>` | End frame for i2v interpolation | - |
 | `--ref-audio <path>` | Reference audio for s2v | - |
-| `--ref-video <path>` | Reference video for animate workflows | - |
+| `--ref-video <path>` | Reference video for animate/v2v workflows | - |
+| `--controlnet-name <name>` | ControlNet type for v2v: canny\|pose\|depth\|detailer | - |
+| `--controlnet-strength <n>` | ControlNet strength for v2v (0.0-1.0) | 0.8 |
+| `--sam2-coordinates <coords>` | SAM2 click coords for animate-replace (x,y or x1,y1;x2,y2) | - |
+| `--trim-end-frame` | Trim last frame for seamless video stitching | - |
+| `--first-frame-strength <n>` | Keyframe strength for start frame (0.0-1.0) | - |
+| `--last-frame-strength <n>` | Keyframe strength for end frame (0.0-1.0) | - |
 | `--last` | Show last render info | - |
 | `--json` | JSON output | false |
 | `--strict-size` | Do not auto-adjust i2v video size for reference resizing constraints | false |
@@ -143,7 +149,8 @@ When installed as an OpenClaw plugin, `sogni-gen` will read defaults from:
             "i2v": "wan_v2.2-14b-fp8_i2v_lightx2v",
             "s2v": "wan_v2.2-14b-fp8_s2v_lightx2v",
             "animate-move": "wan_v2.2-14b-fp8_animate-move_lightx2v",
-            "animate-replace": "wan_v2.2-14b-fp8_animate-replace_lightx2v"
+            "animate-replace": "wan_v2.2-14b-fp8_animate-replace_lightx2v",
+            "v2v": "ltx2-19b-fp8_v2v_distilled"
           },
           "defaultVideoWorkflow": "t2v",
           "defaultNetwork": "fast",
@@ -185,6 +192,8 @@ Seed strategies: `prompt-hash` (deterministic) or `random`.
 
 ## Video Models
 
+### WAN 2.2 Models
+
 | Model | Speed | Use Case |
 |-------|-------|----------|
 | `wan_v2.2-14b-fp8_i2v_lightx2v` | Fast | Default video generation |
@@ -193,6 +202,15 @@ Seed strategies: `prompt-hash` (deterministic) or `random`.
 | `wan_v2.2-14b-fp8_s2v_lightx2v` | Fast | Sound-to-video |
 | `wan_v2.2-14b-fp8_animate-move_lightx2v` | Fast | Animate-move |
 | `wan_v2.2-14b-fp8_animate-replace_lightx2v` | Fast | Animate-replace |
+
+### LTX-2 Models
+
+| Model | Speed | Use Case |
+|-------|-------|----------|
+| `ltx2-19b-fp8_t2v_distilled` | Fast (~2-3min) | Text-to-video, 8-step |
+| `ltx2-19b-fp8_t2v` | Medium (~5min) | Text-to-video, 20-step quality |
+| `ltx2-19b-fp8_v2v_distilled` | Fast (~3min) | Video-to-video with ControlNet |
+| `ltx2-19b-fp8_v2v` | Medium (~5min) | Video-to-video with ControlNet, quality |
 
 ## Image Editing with Context
 
@@ -323,6 +341,26 @@ node sogni-gen.mjs --video --ref face.jpg --ref-audio speech.m4a \
 node sogni-gen.mjs --video --ref subject.jpg --ref-video motion.mp4 \
   --workflow animate-move "transfer motion"
 ```
+
+## Video-to-Video (V2V) with ControlNet
+
+Transform an existing video using LTX-2 models with ControlNet guidance:
+
+```bash
+# Basic v2v with canny edge detection
+node sogni-gen.mjs --video --workflow v2v --ref-video input.mp4 \
+  --controlnet-name canny "stylized anime version"
+
+# V2V with pose detection and custom strength
+node sogni-gen.mjs --video --workflow v2v --ref-video dance.mp4 \
+  --controlnet-name pose --controlnet-strength 0.7 "robot dancing"
+
+# V2V with depth map
+node sogni-gen.mjs --video --workflow v2v --ref-video scene.mp4 \
+  --controlnet-name depth "watercolor painting style"
+```
+
+ControlNet types: `canny` (edge detection), `pose` (body pose), `depth` (depth map), `detailer` (detail enhancement).
 
 ## Photo Restoration
 
