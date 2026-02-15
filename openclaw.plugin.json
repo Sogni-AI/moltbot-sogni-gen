@@ -2,7 +2,7 @@
   "id": "sogni-gen",
   "name": "Sogni Image & Video Generation",
   "description": "Generate images and videos using Sogni AI via the sogni-gen skill.",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "skills": [
     "."
   ],
